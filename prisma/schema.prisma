@@ -1,0 +1,164 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN_GURUWALI
+  GURU
+}
+
+enum UserStatus {
+  ACTIVE
+  PENDING
+  SUSPENDED
+}
+
+enum CurriculumStatus {
+  DRAFT
+  IN_REVIEW
+  VERIFIED
+  PUBLISHED
+  ARCHIVED
+}
+
+enum CurriculumItemType {
+  CP
+  TP
+  ATP
+  MATERI
+  OTHER
+}
+
+enum SourceType {
+  OFFICIAL
+  GOVERNMENT_EXAMPLE
+  TEACHER_CREATED
+  AI_DRAFT
+  OTHER
+}
+
+enum TeacherDocumentType {
+  MODUL_AJAR
+  RPP
+  ATP
+  TP
+  KKTP
+  PROTA
+  PROSEM
+  MATERI_AJAR
+  LKPD
+  PPT_OUTLINE
+  SOAL_PILIHAN_GANDA
+  SOAL_ESSAY
+  KISI_KISI
+  KUNCI_PEMBAHASAN
+  RUBRIK
+  PROGRAM_REMEDIAL
+  PROGRAM_PENGAYAAN
+  OTHER
+}
+
+model User {
+  id           String      @id @default(cuid())
+  name         String
+  email        String      @unique
+  passwordHash String
+  role         UserRole    @default(GURU)
+  status       UserStatus  @default(PENDING)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  documents    TeacherDocument[]
+  favorites    Favorite[]
+  auditLogs    AuditLog[]  @relation("AuditActor")
+}
+
+model CurriculumSource {
+  id            String   @id @default(cuid())
+  title         String
+  publisher     String?
+  sourceType    SourceType
+  url           String?
+  documentYear  Int?
+  versionLabel  String?
+  pageReference String?
+  sha256        String?
+  notes         String?
+  createdAt     DateTime @default(now())
+  items         CurriculumItem[]
+}
+
+model CurriculumItem {
+  id             String           @id @default(cuid())
+  code           String?
+  title          String
+  content        String           @db.Text
+  itemType       CurriculumItemType
+  phase          String?
+  schoolLevel    String?
+  subject        String?
+  grade          String?
+  status         CurriculumStatus @default(DRAFT)
+  version        Int              @default(1)
+  sourceId       String?
+  source         CurriculumSource? @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  createdById    String?
+  verifiedById   String?
+  publishedAt    DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  @@index([status, itemType])
+  @@index([phase, schoolLevel, subject])
+}
+
+model TeacherDocument {
+  id          String               @id @default(cuid())
+  ownerId     String
+  owner       User                 @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  title       String
+  documentType TeacherDocumentType
+  content     Json
+  isArchived  Boolean              @default(false)
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+  versions    DocumentVersion[]
+  favorites   Favorite[]
+  @@index([ownerId, documentType, updatedAt])
+}
+
+model DocumentVersion {
+  id         String           @id @default(cuid())
+  documentId String
+  document   TeacherDocument  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  version    Int
+  content    Json
+  createdAt  DateTime         @default(now())
+  @@unique([documentId, version])
+}
+
+model Favorite {
+  id         String          @id @default(cuid())
+  userId     String
+  documentId String
+  user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  document   TeacherDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  createdAt  DateTime        @default(now())
+  @@unique([userId, documentId])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  actor      User?    @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+  action     String
+  entityType String
+  entityId   String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+  @@index([actorId, createdAt])
+  @@index([entityType, entityId])
+}
